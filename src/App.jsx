@@ -87,7 +87,7 @@ export default function App() {
               Personal compliance dashboard &mdash; 75% rolling six-month rule.
             </p>
           </div>
-          <div className="text-xs font-mono text-white/40 hidden sm:block">v0.2</div>
+          <div className="text-xs font-mono text-white/40 hidden sm:block">v0.3</div>
         </div>
       </header>
 
