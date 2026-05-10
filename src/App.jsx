@@ -9,7 +9,7 @@ import {
   getNextSixMonths,
   projectMonthEnd,
 } from './utils/complianceCalc.js';
-import { fromISO, todayISO, toISO, startOfMonth } from './utils/dateUtils.js';
+import { fromISO, todayISO, toISO, startOfMonth, monthLabel } from './utils/dateUtils.js';
 
 function defaultWindow() {
   const today = new Date();
@@ -129,7 +129,14 @@ export default function App() {
             <h2 className="text-sm uppercase tracking-widest text-white/50">Results</h2>
             <div className="h-px flex-1 bg-white/10" />
           </div>
-          <ResultsPanel monthlyResults={monthlyResults} breaches={breaches} />
+          <ResultsPanel
+            monthlyResults={monthlyResults}
+            breaches={breaches}
+            startingPoint={{
+              label: monthLabel(today),
+              pct: Number(priorCompliancePct) || 0,
+            }}
+          />
         </section>
 
         <footer className="pt-4 pb-8 text-xs text-white/30 text-center">
@@ -151,10 +158,4 @@ function Step({ number, title, children }) {
       <div>
         <h2
           className="text-lg font-semibold tracking-tight mb-3"
-          dangerouslySetInnerHTML={{ __html: title }}
-        />
-        <div className="rounded-2xl bg-surface border border-white/5 p-5">{children}</div>
-      </div>
-    </section>
-  );
-}
+         

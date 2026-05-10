@@ -17,11 +17,23 @@ const STATUS_STYLES = {
   red: { border: 'border-l-danger', text: 'text-danger', label: 'Breach' },
 };
 
-export default function ResultsPanel({ monthlyResults, breaches }) {
-  const chartData = monthlyResults.map((r) => ({
+export default function ResultsPanel({ monthlyResults, breaches, startingPoint }) {
+  const projectionData = monthlyResults.map((r) => ({
     name: r.monthLabel.split(' ')[0].slice(0, 3),
     pct: Number((r.compliancePct * 100).toFixed(1)),
+    isStart: false,
   }));
+
+  const chartData = startingPoint
+    ? [
+        {
+          name: startingPoint.label.split(' ')[0].slice(0, 3),
+          pct: Number((startingPoint.pct * 100).toFixed(1)),
+          isStart: true,
+        },
+        ...projectionData,
+      ]
+    : projectionData;
 
   return (
     <section className="space-y-4">
@@ -72,19 +84,38 @@ export default function ResultsPanel({ monthlyResults, breaches }) {
                   fontSize: 12,
                 }}
                 labelStyle={{ color: '#ffffff80' }}
-                formatter={(v) => [`${v}%`, 'Compliance']}
+                formatter={(v, _n, ctx) => [
+                  `${v}%`,
+                  ctx?.payload?.isStart ? 'Starting' : 'Projected',
+                ]}
               />
               <Line
                 type="monotone"
                 dataKey="pct"
                 stroke="#00d4b8"
                 strokeWidth={2.5}
-                dot={{ r: 4, fill: '#00d4b8', stroke: '#0f1b35', strokeWidth: 2 }}
+                dot={(props) => {
+                  const { cx, cy, payload, index } = props;
+                  if (payload?.isStart) {
+                    return (
+                      <circle key={`dot-${index}`} cx={cx} cy={cy} r={5} fill="#ffffff" stroke="#00d4b8" strokeWidth={2} />
+                    );
+                  }
+                  return (
+                    <circle key={`dot-${index}`} cx={cx} cy={cy} r={4} fill="#00d4b8" stroke="#0f1b35" strokeWidth={2} />
+                  );
+                }}
                 activeDot={{ r: 6 }}
               />
             </LineChart>
           </ResponsiveContainer>
         </div>
+        {startingPoint && (
+          <p className="text-xs text-white/40 mt-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-white border border-accent mr-1.5 align-middle"></span>
+            Starting point uses your stated prior 6-month compliance.
+          </p>
+        )}
       </div>
     </section>
   );
