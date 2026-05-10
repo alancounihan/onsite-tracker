@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  min-height: 100%;
+  background-color: #0f1b35;
+  color: #ffffff;
+  font-family: 'Sora', ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+input[type='date'],
+input[type='number'],
+input[type='text'] {
+  color-scheme: dark;
+}
+
+/* Subtle scrollbar in dark theme */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a3a5e;
+  border-radius: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f1b35;
+}
