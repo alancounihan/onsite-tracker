@@ -63,56 +63,85 @@ export function getNextSixMonths(today, excludedDates = []) {
   return months;
 }
 
+/**
+ * Project compliance at the end of one of the next 6 months.
+ *
+ * Inputs:
+ *   - monthIndex: 0..5 (0 = next month from today)
+ *   - mtdWindow: { start, end } - the user's "current month-to-date" window from Step 2
+ *   - daysOnsite: integer - days onsite in mtdWindow
+ *   - priorCompliancePct: number 0..1 - average compliance for months PRIOR to today's month
+ *   - excludedDates: yyyy-MM-dd[] - public + company holidays
+ *   - plannedLeaveByMonthKey: { 'yyyy-MM': daysOff } - for next 6 months
+ *   - today: Date
+ */
 export function projectMonthEnd({
   monthIndex,
-  complianceWindow,
+  mtdWindow,
   daysOnsite,
+  priorCompliancePct = 0,
   excludedDates = [],
   plannedLeaveByMonthKey = {},
   today,
 }) {
   const todayStart = startOfDay(today);
+  const todaysMonthStart = startOfMonth(todayStart);
+  const todaysMonthEnd = endOfMonth(todayStart);
+
   const targetMonthStart = startOfMonth(addMonths(todayStart, monthIndex + 1));
   const targetMonthEnd = endOfMonth(targetMonthStart);
+
+  // Rolling 6-month window = 6 full calendar months ending on the target month.
   const windowStart = startOfMonth(subMonths(targetMonthStart, ROLLING_WINDOW_MONTHS - 1));
   const windowEnd = targetMonthEnd;
 
   const totalWorkingDays = getWorkingDays(windowStart, windowEnd, excludedDates);
 
-  const historicalEnd = addDays(todayStart, -1);
-  let historicalOnsite = 0;
-  if (historicalEnd >= windowStart) {
-    const subStart = windowStart;
-    const subEnd = historicalEnd <= windowEnd ? historicalEnd : windowEnd;
-    const histWorking = getWorkingDays(subStart, subEnd, excludedDates);
-    const reportedWorking = getWorkingDays(complianceWindow.start, complianceWindow.end, excludedDates);
-    const rate = getDailyOnsiteRate(daysOnsite, reportedWorking);
-    historicalOnsite = histWorking * rate;
+  // ---- Segment A: prior months (any complete months before today's month) ----
+  const priorMonthsEnd = addDays(todaysMonthStart, -1); // last day of last month
+  let priorOnsite = 0;
+  if (priorMonthsEnd >= windowStart) {
+    const segStart = windowStart;
+    const segEnd = priorMonthsEnd <= windowEnd ? priorMonthsEnd : windowEnd;
+    const segWorking = getWorkingDays(segStart, segEnd, excludedDates);
+    priorOnsite = segWorking * priorCompliancePct;
   }
 
+  // MTD daily rate (from user's reported window in Step 2)
+  const mtdReportedWorking = getWorkingDays(mtdWindow.start, mtdWindow.end, excludedDates);
+  const mtdRate = getDailyOnsiteRate(daysOnsite, mtdReportedWorking);
+
+  // ---- Segment B: current month, in window, applied at MTD rate ----
+  // Covers both historical MTD and the rest of the current month.
+  let currentMonthOnsite = 0;
+  if (todaysMonthStart <= windowEnd && todaysMonthEnd >= windowStart) {
+    const segStart = todaysMonthStart > windowStart ? todaysMonthStart : windowStart;
+    const segEnd = todaysMonthEnd < windowEnd ? todaysMonthEnd : windowEnd;
+    const segWorking = getWorkingDays(segStart, segEnd, excludedDates);
+    currentMonthOnsite = segWorking * mtdRate;
+  }
+
+  // ---- Segment C: future months in window (next month onward) ----
   let futureOnsite = 0;
-  const todaysMonthStart = startOfMonth(todayStart);
-  const firstFutureMonthStart = todaysMonthStart > windowStart ? todaysMonthStart : windowStart;
-  let cursor = firstFutureMonthStart;
+  let cursor = startOfMonth(addMonths(todaysMonthStart, 1));
   while (cursor <= windowEnd) {
     const cursorKey = format(cursor, 'yyyy-MM');
     const cursorMonthEnd = endOfMonth(cursor);
-    let sliceStart = cursor < todayStart ? todayStart : cursor;
-    if (sliceStart < windowStart) sliceStart = windowStart;
-    const sliceEnd = cursorMonthEnd < windowEnd ? cursorMonthEnd : windowEnd;
-    if (sliceEnd >= sliceStart) {
-      const sliceWorking = getWorkingDays(sliceStart, sliceEnd, excludedDates);
+    const segStart = cursor > windowStart ? cursor : windowStart;
+    const segEnd = cursorMonthEnd < windowEnd ? cursorMonthEnd : windowEnd;
+    if (segEnd >= segStart) {
+      const segWorking = getWorkingDays(segStart, segEnd, excludedDates);
       const fullMonthWorking = getWorkingDays(cursor, cursorMonthEnd, excludedDates);
       const plannedOff = Number(plannedLeaveByMonthKey[cursorKey] || 0);
       const monthOnsite = Math.max(fullMonthWorking - plannedOff, 0);
       if (fullMonthWorking > 0) {
-        futureOnsite += monthOnsite * (sliceWorking / fullMonthWorking);
+        futureOnsite += monthOnsite * (segWorking / fullMonthWorking);
       }
     }
     cursor = addMonths(cursor, 1);
   }
 
-  const totalOnsite = historicalOnsite + futureOnsite;
+  const totalOnsite = priorOnsite + currentMonthOnsite + futureOnsite;
   const compliancePct = totalWorkingDays > 0 ? totalOnsite / totalWorkingDays : 0;
 
   return {

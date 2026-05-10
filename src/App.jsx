@@ -9,12 +9,11 @@ import {
   getNextSixMonths,
   projectMonthEnd,
 } from './utils/complianceCalc.js';
-import { fromISO, todayISO, toISO, subMonths } from './utils/dateUtils.js';
+import { fromISO, todayISO, toISO, startOfMonth } from './utils/dateUtils.js';
 
 function defaultWindow() {
   const today = new Date();
-  const start = subMonths(today, 6);
-  return { start: toISO(start), end: toISO(today) };
+  return { start: toISO(startOfMonth(today)), end: toISO(today) };
 }
 
 export default function App() {
@@ -28,6 +27,7 @@ export default function App() {
   const [windowStart, setWindowStart] = useState(initialWindow.start);
   const [windowEnd, setWindowEnd] = useState(initialWindow.end);
   const [daysOnsite, setDaysOnsite] = useState(0);
+  const [priorCompliancePct, setPriorCompliancePct] = useState(0.75);
 
   const [plannedLeave, setPlannedLeave] = useState({});
 
@@ -48,7 +48,6 @@ export default function App() {
         next[m.key] = v;
         if (v !== prev[m.key]) changed = true;
       }
-      // Drop any keys not in the current 6-month set.
       for (const k of Object.keys(prev)) {
         if (!(k in next)) {
           changed = true;
@@ -64,14 +63,15 @@ export default function App() {
     return Array.from({ length: 6 }, (_, i) =>
       projectMonthEnd({
         monthIndex: i,
-        complianceWindow: { start: fromISO(windowStart), end: fromISO(windowEnd) },
+        mtdWindow: { start: fromISO(windowStart), end: fromISO(windowEnd) },
         daysOnsite: Number(daysOnsite) || 0,
+        priorCompliancePct: Number(priorCompliancePct) || 0,
         excludedDates,
         plannedLeaveByMonthKey: plannedLeave,
         today,
       })
     );
-  }, [windowStart, windowEnd, daysOnsite, excludedDates, plannedLeave, today]);
+  }, [windowStart, windowEnd, daysOnsite, priorCompliancePct, excludedDates, plannedLeave, today]);
 
   const breaches = useMemo(() => checkBreaches(monthlyResults), [monthlyResults]);
 
@@ -87,7 +87,7 @@ export default function App() {
               Personal compliance dashboard &mdash; 75% rolling six-month rule.
             </p>
           </div>
-          <div className="text-xs font-mono text-white/40 hidden sm:block">v0.1</div>
+          <div className="text-xs font-mono text-white/40 hidden sm:block">v0.2</div>
         </div>
       </header>
 
@@ -109,6 +109,8 @@ export default function App() {
             setWindowEnd={setWindowEnd}
             daysOnsite={daysOnsite}
             setDaysOnsite={setDaysOnsite}
+            priorCompliancePct={priorCompliancePct}
+            setPriorCompliancePct={setPriorCompliancePct}
             excludedDates={excludedDates}
           />
         </Step>
