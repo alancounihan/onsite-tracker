@@ -9,24 +9,23 @@ import {
   getNextSixMonths,
   projectMonthEnd,
 } from './utils/complianceCalc.js';
-import { fromISO, todayISO, toISO, startOfMonth, monthLabel } from './utils/dateUtils.js';
-
-function defaultWindow() {
-  const today = new Date();
-  return { start: toISO(startOfMonth(today)), end: toISO(today) };
-}
+import { fromISO, todayISO, monthLabel } from './utils/dateUtils.js';
 
 export default function App() {
   const today = useMemo(() => fromISO(todayISO()), []);
   const currentYear = today.getFullYear();
 
+  const [theme, setTheme] = useState('dark');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
   const [publicHolidays, setPublicHolidays] = useState(() => irishPublicHolidays(currentYear));
   const [companyHolidays, setCompanyHolidays] = useState([]);
 
-  const initialWindow = useMemo(defaultWindow, []);
-  const [windowStart, setWindowStart] = useState(initialWindow.start);
-  const [windowEnd, setWindowEnd] = useState(initialWindow.end);
-  const [daysOnsite, setDaysOnsite] = useState(0);
+  const [onsiteSoFar, setOnsiteSoFar] = useState(0);
+  const [offPlannedRest, setOffPlannedRest] = useState(0);
   const [priorCompliancePct, setPriorCompliancePct] = useState(0.75);
 
   const [plannedLeave, setPlannedLeave] = useState({});
@@ -38,7 +37,6 @@ export default function App() {
 
   const months = useMemo(() => getNextSixMonths(today, excludedDates), [today, excludedDates]);
 
-  // Drop stale planned-leave keys when months shift, and clamp to working days.
   useEffect(() => {
     setPlannedLeave((prev) => {
       const next = {};
@@ -49,9 +47,7 @@ export default function App() {
         if (v !== prev[m.key]) changed = true;
       }
       for (const k of Object.keys(prev)) {
-        if (!(k in next)) {
-          changed = true;
-        }
+        if (!(k in next)) changed = true;
       }
       return changed ? next : prev;
     });
@@ -59,19 +55,18 @@ export default function App() {
   }, [months.map((m) => `${m.key}:${m.workingDays}`).join('|')]);
 
   const monthlyResults = useMemo(() => {
-    if (!windowStart || !windowEnd) return [];
     return Array.from({ length: 6 }, (_, i) =>
       projectMonthEnd({
         monthIndex: i,
-        mtdWindow: { start: fromISO(windowStart), end: fromISO(windowEnd) },
-        daysOnsite: Number(daysOnsite) || 0,
+        onsiteSoFar: Number(onsiteSoFar) || 0,
+        offPlannedRest: Number(offPlannedRest) || 0,
         priorCompliancePct: Number(priorCompliancePct) || 0,
         excludedDates,
         plannedLeaveByMonthKey: plannedLeave,
         today,
       })
     );
-  }, [windowStart, windowEnd, daysOnsite, priorCompliancePct, excludedDates, plannedLeave, today]);
+  }, [onsiteSoFar, offPlannedRest, priorCompliancePct, excludedDates, plannedLeave, today]);
 
   const breaches = useMemo(() => checkBreaches(monthlyResults), [monthlyResults]);
 
@@ -87,7 +82,17 @@ export default function App() {
               Personal compliance dashboard &mdash; 75% rolling six-month rule.
             </p>
           </div>
-          <div className="text-xs font-mono text-white/40 hidden sm:block">v0.3</div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+              className="rounded-full border border-white/10 bg-bg/40 hover:bg-bg/70 transition px-3 py-1.5 text-xs font-mono"
+            >
+              {theme === 'dark' ? '☼ Light' : '☾ Dark'}
+            </button>
+            <div className="text-xs font-mono text-white/40 hidden sm:block">v0.4</div>
+          </div>
         </div>
       </header>
 
@@ -103,14 +108,12 @@ export default function App() {
 
         <Step number={2} title="Current Compliance">
           <ComplianceInput
-            windowStart={windowStart}
-            setWindowStart={setWindowStart}
-            windowEnd={windowEnd}
-            setWindowEnd={setWindowEnd}
-            daysOnsite={daysOnsite}
-            setDaysOnsite={setDaysOnsite}
             priorCompliancePct={priorCompliancePct}
             setPriorCompliancePct={setPriorCompliancePct}
+            onsiteSoFar={onsiteSoFar}
+            setOnsiteSoFar={setOnsiteSoFar}
+            offPlannedRest={offPlannedRest}
+            setOffPlannedRest={setOffPlannedRest}
             excludedDates={excludedDates}
           />
         </Step>
@@ -158,4 +161,10 @@ function Step({ number, title, children }) {
       <div>
         <h2
           className="text-lg font-semibold tracking-tight mb-3"
-         
+          dangerouslySetInnerHTML={{ __html: title }}
+        />
+        <div className="rounded-2xl bg-surface border border-white/5 p-5">{children}</div>
+      </div>
+    </section>
+  );
+}

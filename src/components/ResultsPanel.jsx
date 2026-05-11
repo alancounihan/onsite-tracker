@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   CartesianGrid,
   Line,
@@ -17,7 +18,38 @@ const STATUS_STYLES = {
   red: { border: 'border-l-danger', text: 'text-danger', label: 'Breach' },
 };
 
+function readCssVar(name, fallback) {
+  if (typeof window === 'undefined') return fallback;
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  if (!raw) return fallback;
+  return `rgb(${raw})`;
+}
+
 export default function ResultsPanel({ monthlyResults, breaches, startingPoint }) {
+  const [themeColors, setThemeColors] = useState(() => ({
+    accent: '#3253DC',
+    bg: '#0c1733',
+    surface: '#182649',
+    fg: '#f5f7fc',
+    danger: '#ef4444',
+  }));
+
+  useEffect(() => {
+    const update = () => {
+      setThemeColors({
+        accent: readCssVar('--color-accent', '#3253DC'),
+        bg: readCssVar('--color-bg', '#0c1733'),
+        surface: readCssVar('--color-surface', '#182649'),
+        fg: readCssVar('--color-fg', '#f5f7fc'),
+        danger: readCssVar('--color-danger', '#ef4444'),
+      });
+    };
+    update();
+    const obs = new MutationObserver(update);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+
   const projectionData = monthlyResults.map((r) => ({
     name: r.monthLabel.split(' ')[0].slice(0, 3),
     pct: Number((r.compliancePct * 100).toFixed(1)),
@@ -34,6 +66,9 @@ export default function ResultsPanel({ monthlyResults, breaches, startingPoint }
         ...projectionData,
       ]
     : projectionData;
+
+  const gridStroke = themeColors.fg + '20';
+  const axisStroke = themeColors.fg + '90';
 
   return (
     <section className="space-y-4">
@@ -53,17 +88,17 @@ export default function ResultsPanel({ monthlyResults, breaches, startingPoint }
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 10, right: 16, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="#ffffff10" vertical={false} />
+              <CartesianGrid stroke={gridStroke} vertical={false} />
               <XAxis
                 dataKey="name"
-                stroke="#ffffff60"
+                stroke={axisStroke}
                 tickLine={false}
                 axisLine={false}
                 style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 12 }}
               />
               <YAxis
                 domain={[0, 100]}
-                stroke="#ffffff60"
+                stroke={axisStroke}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) => `${v}%`}
@@ -71,19 +106,20 @@ export default function ResultsPanel({ monthlyResults, breaches, startingPoint }
               />
               <ReferenceLine
                 y={COMPLIANCE_THRESHOLD * 100}
-                stroke="#ef4444"
+                stroke={themeColors.danger}
                 strokeDasharray="4 4"
-                label={{ value: 'Minimum', fill: '#ef4444', fontSize: 11, position: 'insideTopRight' }}
+                label={{ value: 'Minimum', fill: themeColors.danger, fontSize: 11, position: 'insideTopRight' }}
               />
               <Tooltip
                 contentStyle={{
-                  background: '#1a2540',
-                  border: '1px solid #ffffff20',
+                  background: themeColors.surface,
+                  border: `1px solid ${themeColors.fg}30`,
                   borderRadius: 8,
                   fontFamily: 'IBM Plex Mono, monospace',
                   fontSize: 12,
+                  color: themeColors.fg,
                 }}
-                labelStyle={{ color: '#ffffff80' }}
+                labelStyle={{ color: themeColors.fg }}
                 formatter={(v, _n, ctx) => [
                   `${v}%`,
                   ctx?.payload?.isStart ? 'Starting' : 'Projected',
@@ -92,17 +128,17 @@ export default function ResultsPanel({ monthlyResults, breaches, startingPoint }
               <Line
                 type="monotone"
                 dataKey="pct"
-                stroke="#00d4b8"
+                stroke={themeColors.accent}
                 strokeWidth={2.5}
                 dot={(props) => {
                   const { cx, cy, payload, index } = props;
                   if (payload?.isStart) {
                     return (
-                      <circle key={`dot-${index}`} cx={cx} cy={cy} r={5} fill="#ffffff" stroke="#00d4b8" strokeWidth={2} />
+                      <circle key={`dot-${index}`} cx={cx} cy={cy} r={5} fill={themeColors.bg} stroke={themeColors.accent} strokeWidth={2.5} />
                     );
                   }
                   return (
-                    <circle key={`dot-${index}`} cx={cx} cy={cy} r={4} fill="#00d4b8" stroke="#0f1b35" strokeWidth={2} />
+                    <circle key={`dot-${index}`} cx={cx} cy={cy} r={4} fill={themeColors.accent} stroke={themeColors.bg} strokeWidth={2} />
                   );
                 }}
                 activeDot={{ r: 6 }}
@@ -112,7 +148,6 @@ export default function ResultsPanel({ monthlyResults, breaches, startingPoint }
         </div>
         {startingPoint && (
           <p className="text-xs text-white/40 mt-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-white border border-accent mr-1.5 align-middle"></span>
             Starting point uses your stated prior 6-month compliance.
           </p>
         )}

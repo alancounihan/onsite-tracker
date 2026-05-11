@@ -41,11 +41,6 @@ export function getWorkingDays(start, end, excludedDates = []) {
   return count;
 }
 
-export function getDailyOnsiteRate(daysOnsite, workingDaysInWindow) {
-  if (!workingDaysInWindow || workingDaysInWindow <= 0) return 0;
-  return daysOnsite / workingDaysInWindow;
-}
-
 export function getNextSixMonths(today, excludedDates = []) {
   const start = startOfMonth(addMonths(today, 1));
   const months = [];
@@ -66,19 +61,19 @@ export function getNextSixMonths(today, excludedDates = []) {
 /**
  * Project compliance at the end of one of the next 6 months.
  *
- * Inputs:
- *   - monthIndex: 0..5 (0 = next month from today)
- *   - mtdWindow: { start, end } - the user's "current month-to-date" window from Step 2
- *   - daysOnsite: integer - days onsite in mtdWindow
- *   - priorCompliancePct: number 0..1 - average compliance for months PRIOR to today's month
- *   - excludedDates: yyyy-MM-dd[] - public + company holidays
- *   - plannedLeaveByMonthKey: { 'yyyy-MM': daysOff } - for next 6 months
- *   - today: Date
+ * Current-month contribution is derived from:
+ *   - onsiteSoFar:    integer days onsite in [startOfMonth(today), today]
+ *   - offPlannedRest: integer days off planned in (today, endOfMonth(today)]
+ *
+ * So the current month's total onsite = onsiteSoFar + max(workingRest - offPlannedRest, 0).
+ *
+ * Prior months (any complete months before today's month) use priorCompliancePct.
+ * Future months (next month onward) use plannedLeaveByMonthKey.
  */
 export function projectMonthEnd({
   monthIndex,
-  mtdWindow,
-  daysOnsite,
+  onsiteSoFar = 0,
+  offPlannedRest = 0,
   priorCompliancePct = 0,
   excludedDates = [],
   plannedLeaveByMonthKey = {},
@@ -97,8 +92,8 @@ export function projectMonthEnd({
 
   const totalWorkingDays = getWorkingDays(windowStart, windowEnd, excludedDates);
 
-  // ---- Segment A: prior months (any complete months before today's month) ----
-  const priorMonthsEnd = addDays(todaysMonthStart, -1); // last day of last month
+  // ---- Segment A: prior months (complete months before today's month) ----
+  const priorMonthsEnd = addDays(todaysMonthStart, -1);
   let priorOnsite = 0;
   if (priorMonthsEnd >= windowStart) {
     const segStart = windowStart;
@@ -107,18 +102,14 @@ export function projectMonthEnd({
     priorOnsite = segWorking * priorCompliancePct;
   }
 
-  // MTD daily rate (from user's reported window in Step 2)
-  const mtdReportedWorking = getWorkingDays(mtdWindow.start, mtdWindow.end, excludedDates);
-  const mtdRate = getDailyOnsiteRate(daysOnsite, mtdReportedWorking);
-
-  // ---- Segment B: current month, in window, applied at MTD rate ----
-  // Covers both historical MTD and the rest of the current month.
+  // ---- Segment B: current month, if within window ----
   let currentMonthOnsite = 0;
   if (todaysMonthStart <= windowEnd && todaysMonthEnd >= windowStart) {
-    const segStart = todaysMonthStart > windowStart ? todaysMonthStart : windowStart;
-    const segEnd = todaysMonthEnd < windowEnd ? todaysMonthEnd : windowEnd;
-    const segWorking = getWorkingDays(segStart, segEnd, excludedDates);
-    currentMonthOnsite = segWorking * mtdRate;
+    // Working days remaining after today (today excluded).
+    const restStart = addDays(todayStart, 1);
+    const workingRest = restStart <= todaysMonthEnd ? getWorkingDays(restStart, todaysMonthEnd, excludedDates) : 0;
+    const restOnsite = Math.max(workingRest - Number(offPlannedRest || 0), 0);
+    currentMonthOnsite = Number(onsiteSoFar || 0) + restOnsite;
   }
 
   // ---- Segment C: future months in window (next month onward) ----
