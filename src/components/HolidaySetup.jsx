@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { fromISO } from '../utils/dateUtils.js';
+import { COUNTRIES } from '../utils/publicHolidays.js';
 
-function HolidayList({ title, items, onAdd, onUpdate, onRemove, max, hint }) {
+function HolidayList({ title, items, onAdd, onUpdate, onRemove, max, hint, headerExtra }) {
   const [date, setDate] = useState('');
   const [label, setLabel] = useState('');
 
@@ -21,6 +22,8 @@ function HolidayList({ title, items, onAdd, onUpdate, onRemove, max, hint }) {
           {max ? `/${max}` : ''}
         </span>
       </div>
+
+      {headerExtra}
 
       {hint ? <p className="text-xs text-white/50 mb-3">{hint}</p> : null}
 
@@ -88,6 +91,8 @@ function HolidayList({ title, items, onAdd, onUpdate, onRemove, max, hint }) {
 }
 
 export default function HolidaySetup({
+  country,
+  setCountry,
   publicHolidays,
   setPublicHolidays,
   companyHolidays,
@@ -113,6 +118,23 @@ export default function HolidaySetup({
   const showCoverageWarning =
     companyHolidays.length > 0 && (!companyMonths.has(5) || !companyMonths.has(10));
 
+  const countrySelector = (
+    <div className="mb-3">
+      <label className="block text-xs text-white/60 mb-1">Country</label>
+      <select
+        value={country}
+        onChange={(e) => setCountry(e.target.value)}
+        className="w-full bg-bg border border-white/10 rounded px-2 py-1.5 text-sm font-mono"
+      >
+        {COUNTRIES.map((c) => (
+          <option key={c.code} value={c.code}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-white/60">
@@ -121,12 +143,13 @@ export default function HolidaySetup({
 
       <div className="grid md:grid-cols-2 gap-4">
         <HolidayList
-          title="Irish Public Holidays"
+          title="Public Holidays"
           items={publicHolidays}
           onAdd={addToList(setPublicHolidays, 'ph')}
           onUpdate={updateList(setPublicHolidays)}
           onRemove={removeFromList(setPublicHolidays)}
-          hint="Pre-populated with the 10 standard holidays. Edit or delete as needed."
+          hint="Auto-populated from your selected country. Edit, add, or delete as needed."
+          headerExtra={countrySelector}
         />
         <HolidayList
           title="Company Holidays"

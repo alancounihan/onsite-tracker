@@ -3,7 +3,7 @@ import HolidaySetup from './components/HolidaySetup.jsx';
 import ComplianceInput from './components/ComplianceInput.jsx';
 import PlannedLeaveTable from './components/PlannedLeaveTable.jsx';
 import ResultsPanel from './components/ResultsPanel.jsx';
-import { irishPublicHolidays } from './utils/irishHolidays.js';
+import { publicHolidays } from './utils/publicHolidays.js';
 import {
   checkBreaches,
   getNextSixMonths,
@@ -12,16 +12,33 @@ import {
 import { fromISO, todayISO, monthLabel } from './utils/dateUtils.js';
 
 export default function App() {
-  const today = useMemo(() => fromISO(todayISO()), []);
-  const currentYear = today.getFullYear();
+  // Reactive `today` so the next-6-months table rolls forward across month boundaries.
+  const [todayKey, setTodayKey] = useState(() => todayISO());
+  useEffect(() => {
+    const id = setInterval(() => {
+      const k = todayISO();
+      setTodayKey((prev) => (prev !== k ? k : prev));
+    }, 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+  const today = useMemo(() => fromISO(todayKey), [todayKey]);
 
   const [theme, setTheme] = useState('dark');
-
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  const [publicHolidays, setPublicHolidays] = useState(() => irishPublicHolidays(currentYear));
+  const [country, setCountry] = useState('IE');
+
+  const [publicHolidaysList, setPublicHolidaysList] = useState(() =>
+    publicHolidays('IE', new Date().getFullYear())
+  );
+
+  // When country or year changes, repopulate public holidays.
+  useEffect(() => {
+    setPublicHolidaysList(publicHolidays(country, today.getFullYear()));
+  }, [country, today]);
+
   const [companyHolidays, setCompanyHolidays] = useState([]);
 
   const [offSoFar, setOffSoFar] = useState(0);
@@ -31,8 +48,8 @@ export default function App() {
   const [plannedLeave, setPlannedLeave] = useState({});
 
   const excludedDates = useMemo(
-    () => [...publicHolidays, ...companyHolidays].map((h) => h.date),
-    [publicHolidays, companyHolidays]
+    () => [...publicHolidaysList, ...companyHolidays].map((h) => h.date),
+    [publicHolidaysList, companyHolidays]
   );
 
   const months = useMemo(() => getNextSixMonths(today, excludedDates), [today, excludedDates]);
@@ -91,7 +108,7 @@ export default function App() {
             >
               {theme === 'dark' ? '☼ Light' : '☾ Dark'}
             </button>
-            <div className="text-xs font-mono text-white/40 hidden sm:block">v0.5</div>
+            <div className="text-xs font-mono text-white/40 hidden sm:block">v0.6</div>
           </div>
         </div>
       </header>
@@ -99,8 +116,10 @@ export default function App() {
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-10">
         <Step number={1} title="Holiday Setup">
           <HolidaySetup
-            publicHolidays={publicHolidays}
-            setPublicHolidays={setPublicHolidays}
+            country={country}
+            setCountry={setCountry}
+            publicHolidays={publicHolidaysList}
+            setPublicHolidays={setPublicHolidaysList}
             companyHolidays={companyHolidays}
             setCompanyHolidays={setCompanyHolidays}
           />
