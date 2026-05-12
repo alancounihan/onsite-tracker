@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import {
   getWorkingDays,
+  projectMonthEnd,
   statusFor,
   COMPLIANCE_THRESHOLD,
 } from '../utils/complianceCalc.js';
@@ -22,8 +23,8 @@ const STATUS_COLORS = {
 export default function ComplianceInput({
   priorCompliancePct,
   setPriorCompliancePct,
-  onsiteSoFar,
-  setOnsiteSoFar,
+  offSoFar,
+  setOffSoFar,
   offPlannedRest,
   setOffPlannedRest,
   excludedDates,
@@ -40,16 +41,26 @@ export default function ComplianceInput({
     };
   }, [today, excludedDates]);
 
-  const mtdPct = workingSoFar > 0 ? Math.min(Number(onsiteSoFar || 0) / workingSoFar, 1.5) : 0;
+  const onsiteSoFar = Math.max(workingSoFar - Number(offSoFar || 0), 0);
+  const mtdPct = workingSoFar > 0 ? Math.min(onsiteSoFar / workingSoFar, 1.5) : 0;
   const mtdStatus = statusFor(mtdPct);
 
-  const restOnsite = Math.max(workingRest - Number(offPlannedRest || 0), 0);
-  const projectedMonthOnsite = Number(onsiteSoFar || 0) + restOnsite;
-  const projectedMonthPct =
-    workingSoFar + workingRest > 0
-      ? Math.min(projectedMonthOnsite / (workingSoFar + workingRest), 1.5)
-      : 0;
-  const projectedStatus = statusFor(projectedMonthPct);
+  // Rolling 6-month compliance projected to end of current month.
+  const rollingProjection = useMemo(
+    () =>
+      projectMonthEnd({
+        monthIndex: -1,
+        offSoFar: Number(offSoFar) || 0,
+        offPlannedRest: Number(offPlannedRest) || 0,
+        priorCompliancePct: Number(priorCompliancePct) || 0,
+        excludedDates,
+        plannedLeaveByMonthKey: {},
+        today,
+      }),
+    [offSoFar, offPlannedRest, priorCompliancePct, excludedDates, today]
+  );
+
+  const rollingStatus = statusFor(rollingProjection.compliancePct);
 
   return (
     <div className="space-y-5">
@@ -87,16 +98,16 @@ export default function ComplianceInput({
 
         <div className="grid sm:grid-cols-2 gap-3">
           <label className="block text-sm">
-            <span className="text-white/60 mb-1 block">Days onsite so far</span>
+            <span className="text-white/60 mb-1 block">Days offsite so far</span>
             <input
               type="number"
               min="0"
               max={workingSoFar}
-              value={Number.isFinite(onsiteSoFar) ? onsiteSoFar : 0}
+              value={Number.isFinite(offSoFar) ? offSoFar : 0}
               onChange={(e) => {
                 const v = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
                 if (Number.isNaN(v)) return;
-                setOnsiteSoFar(Math.max(0, Math.min(v, workingSoFar)));
+                setOffSoFar(Math.max(0, Math.min(v, workingSoFar)));
               }}
               className="w-full bg-bg border border-white/10 rounded px-3 py-2 font-mono text-lg"
             />
@@ -132,9 +143,9 @@ export default function ComplianceInput({
             valueClass={STATUS_COLORS[mtdStatus]}
           />
           <Stat
-            label="Projected end-of-month"
-            value={`${(projectedMonthPct * 100).toFixed(1)}%`}
-            valueClass={STATUS_COLORS[projectedStatus]}
+            label="Projected end-of-month (rolling 6m)"
+            value={`${(rollingProjection.compliancePct * 100).toFixed(1)}%`}
+            valueClass={STATUS_COLORS[rollingStatus]}
           />
         </div>
       </div>
@@ -146,11 +157,4 @@ export default function ComplianceInput({
   );
 }
 
-function Stat({ label, value, valueClass = '' }) {
-  return (
-    <div className="rounded-lg bg-bg/40 border border-white/5 px-3 py-2">
-      <div className="text-xs text-white/50">{label}</div>
-      <div className={`font-mono text-xl mt-1 ${valueClass}`}>{value}</div>
-    </div>
-  );
-}
+fun

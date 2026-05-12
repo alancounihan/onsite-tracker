@@ -1,10 +1,3 @@
-// Compliance math for OnsiteTracker.
-//
-// Policy constants:
-//   - Standard working week = 5 days (Mon-Fri)
-//   - Maintain >= 75% over any rolling 6-month window
-//   - Must not fall below 75% for 4 consecutive rolling months
-
 import {
   addDays,
   addMonths,
@@ -58,21 +51,9 @@ export function getNextSixMonths(today, excludedDates = []) {
   return months;
 }
 
-/**
- * Project compliance at the end of one of the next 6 months.
- *
- * Current-month contribution is derived from:
- *   - onsiteSoFar:    integer days onsite in [startOfMonth(today), today]
- *   - offPlannedRest: integer days off planned in (today, endOfMonth(today)]
- *
- * So the current month's total onsite = onsiteSoFar + max(workingRest - offPlannedRest, 0).
- *
- * Prior months (any complete months before today's month) use priorCompliancePct.
- * Future months (next month onward) use plannedLeaveByMonthKey.
- */
 export function projectMonthEnd({
   monthIndex,
-  onsiteSoFar = 0,
+  offSoFar = 0,
   offPlannedRest = 0,
   priorCompliancePct = 0,
   excludedDates = [],
@@ -86,13 +67,11 @@ export function projectMonthEnd({
   const targetMonthStart = startOfMonth(addMonths(todayStart, monthIndex + 1));
   const targetMonthEnd = endOfMonth(targetMonthStart);
 
-  // Rolling 6-month window = 6 full calendar months ending on the target month.
   const windowStart = startOfMonth(subMonths(targetMonthStart, ROLLING_WINDOW_MONTHS - 1));
   const windowEnd = targetMonthEnd;
 
   const totalWorkingDays = getWorkingDays(windowStart, windowEnd, excludedDates);
 
-  // ---- Segment A: prior months (complete months before today's month) ----
   const priorMonthsEnd = addDays(todaysMonthStart, -1);
   let priorOnsite = 0;
   if (priorMonthsEnd >= windowStart) {
@@ -102,17 +81,16 @@ export function projectMonthEnd({
     priorOnsite = segWorking * priorCompliancePct;
   }
 
-  // ---- Segment B: current month, if within window ----
   let currentMonthOnsite = 0;
   if (todaysMonthStart <= windowEnd && todaysMonthEnd >= windowStart) {
-    // Working days remaining after today (today excluded).
+    const workingSoFar = getWorkingDays(todaysMonthStart, todayStart, excludedDates);
     const restStart = addDays(todayStart, 1);
     const workingRest = restStart <= todaysMonthEnd ? getWorkingDays(restStart, todaysMonthEnd, excludedDates) : 0;
+    const onsiteSoFar = Math.max(workingSoFar - Number(offSoFar || 0), 0);
     const restOnsite = Math.max(workingRest - Number(offPlannedRest || 0), 0);
-    currentMonthOnsite = Number(onsiteSoFar || 0) + restOnsite;
+    currentMonthOnsite = onsiteSoFar + restOnsite;
   }
 
-  // ---- Segment C: future months in window (next month onward) ----
   let futureOnsite = 0;
   let cursor = startOfMonth(addMonths(todaysMonthStart, 1));
   while (cursor <= windowEnd) {
