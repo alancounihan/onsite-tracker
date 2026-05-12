@@ -45,7 +45,6 @@ export default function ComplianceInput({
   const mtdPct = workingSoFar > 0 ? Math.min(onsiteSoFar / workingSoFar, 1.5) : 0;
   const mtdStatus = statusFor(mtdPct);
 
-  // Rolling 6-month compliance projected to end of current month.
   const rollingProjection = useMemo(
     () =>
       projectMonthEnd({
@@ -157,4 +156,11 @@ export default function ComplianceInput({
   );
 }
 
-fun
+function Stat({ label, value, valueClass = '' }) {
+  return (
+    <div className="rounded-lg bg-bg/40 border border-white/5 px-3 py-2">
+      <div className="text-xs text-white/50">{label}</div>
+      <div className={`font-mono text-xl mt-1 ${valueClass}`}>{value}</div>
+    </div>
+  );
+}
